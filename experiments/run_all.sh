@@ -16,6 +16,7 @@ SCRIPTS=("$@")
 [ ${#SCRIPTS[@]} -eq 0 ] && SCRIPTS=(scaling_accuracy.m d2_consistency.m)
 command -v "$MATLAB" > /dev/null || { echo "matlab not found; set MATLAB=/path/to/matlab" >&2; exit 1; }
 
+trap 'trap - INT TERM; pkill -P $$; pkill -f "run.'\''$PWD/"; exit 130' INT TERM   # also stop the MATLAB job
 mkdir -p results
 LOG=results/run_all.log
 : > "$LOG"
@@ -27,8 +28,10 @@ LOG=results/run_all.log
 fail=0
 for s in "${SCRIPTS[@]}"; do
   echo "===== $s ($(date +%T))" | tee -a "$LOG"
-  timeout -k 10 "$TIMEOUT" "$MATLAB" -batch "run('$PWD/$s')" < /dev/null 2>&1 | tee -a "$LOG"
-  rc=${PIPESTATUS[0]}
+  # in the background + wait, so that a kill reaches the trap at once
+  { timeout -k 10 "$TIMEOUT" "$MATLAB" -batch "run('$PWD/$s')" < /dev/null 2>&1; echo $? > results/.rc; } | tee -a "$LOG" &
+  wait $!
+  rc=$(cat results/.rc); rm -f results/.rc
   echo "exit=$rc (${s%.m})" | tee -a "$LOG"
   [ "$rc" -ne 0 ] && fail=1
 done

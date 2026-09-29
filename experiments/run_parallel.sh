@@ -20,7 +20,9 @@ SCRIPTS=("$@")
 [ ${#SCRIPTS[@]} -eq 0 ] && SCRIPTS=(scaling_accuracy.m d2_consistency.m)
 command -v "$MATLAB" > /dev/null || { echo "matlab not found; set MATLAB=/path/to/matlab" >&2; exit 1; }
 command -v taskset > /dev/null || { echo "taskset not found (package util-linux)" >&2; exit 1; }
-trap 'kill 0' INT TERM
+# stopping this script (Ctrl-C, kill) also stops the per-core loops and the MATLAB
+# jobs (timeout puts each job in its own process group: found by command line)
+trap 'trap - INT TERM; pkill -P $$; pkill -f "run.'\''$PWD/"; exit 130' INT TERM
 
 # One logical CPU per physical core (the first of its thread siblings),
 # ordered socket 0, 1, 2, ..., 0, 1, 2, ... so that the jobs spread evenly.

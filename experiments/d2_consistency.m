@@ -29,7 +29,7 @@ clear; clc;
 %  ------------------------------------------------------------------------
 
 NS             = 2:14;                   % number of qubits
-N_TRIALS       = 1;                      % random real states per n
+N_TRIALS       = 3;                      % random real states per n
 SEED0          = 2000;                   % seeds SEED0 + trial (real ensemble of scaling_accuracy.m)
 UNIT_K         = 4;                      % columns of the random probe X
 GATEWISE_MAX_n = 10;                     % gate-by-gate check up to this n

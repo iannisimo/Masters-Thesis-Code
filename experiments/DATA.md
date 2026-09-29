@@ -26,7 +26,7 @@ Every state is normalized, and every seed is fixed, so a rerun prepares the same
 |---|---|---|---|---|
 | **complex** | `randn + 1i*randn` | 1000 + trial | Bullock, Householder | **Correctness only.** Error and unitarity defect (Figure 5.1, Table 5.1). Its times are in `scaling_raw.csv` but are not exported or used. |
 | **real** | `randn` | 2000 + trial | all three | **Correctness and every time.** All algorithms are timed on this ensemble, so the time plots compare them on the same states. |
-| **real, equal N** | `randn` | 1 + trial | all three | The equal-N sweep. At a given N every d and every algorithm prepares **the same state**. |
+| **real, equal N** | `randn` | trial | all three | The equal-N sweep. At a given N every d and every algorithm prepares **the same state**. |
 | **structured** | 10 real inputs that reach the degenerate cases (zero entries, zero nodes, basis states, uniform, sparse) | 7919·case + k | all three | Pass/fail, error, defect, identity gates. The chapter keeps one sentence on them (all pass) and uses the identity counts in the future-work paragraph. |
 | **real, d = 2** | `randn` | 2000 + trial | KP-Tree, both QdKP-Trees | The same states as the real ensemble of the scaling grid at d = 2. |
 
@@ -36,12 +36,12 @@ Complex states cost more time. At N ≥ 1000, Bullock builds about 1.4× slower 
 
 | Grid | Points | Runs |
 |---|---|---|
-| Scaling in N | d ∈ {2, 3, 4, 5}, n = 2, 3, … while N = dⁿ ≤ 2¹⁴: 13, 7, 6, 5 sizes | 31 per (algorithm, ensemble), 155 in total |
-| Degenerate inputs | 10 inputs × (d, n) ∈ {(2,4), (3,3), (4,2), (5,2)} × 3 algorithms | 120 |
-| Equal N | N = 729 (d = 3, 9, 27), 4096 (d = 2, 4, 8, 16, 64), 6561 (d = 3, 9, 81), 15625 (d = 5, 25, 125) × 3 algorithms | 42 |
-| d = 2 consistency | n = 2, …, 14; gate-by-gate check up to n = 10 | 13 per algorithm |
+| Scaling in N | d ∈ {2, 3, 4, 5}, n = 2, 3, … while N = dⁿ ≤ 2¹⁴: 13, 7, 6, 5 sizes | 3 × 31 per (algorithm, ensemble), 465 in total |
+| Degenerate inputs | 10 inputs × (d, n) ∈ {(2,4), (3,3), (4,2), (5,2)} × 3 algorithms | 120 (fixed states, run once) |
+| Equal N | N = 729 (d = 3, 9, 27), 4096 (d = 2, 4, 8, 16, 64), 6561 (d = 3, 9, 81), 15625 (d = 5, 25, 125) × 3 algorithms | 3 × 42 = 126 |
+| d = 2 consistency | n = 2, …, 14; gate-by-gate check up to n = 10 | 3 × 13 per algorithm |
 
-Every configuration runs once (`N_TRIALS = 1`). The `*_min`/`*_max` columns and the summary files become meaningful when `N_TRIALS` > 1.
+Every random configuration runs 3 times (`N_TRIALS = 3`, trials 1, 2, 3 with the seeds above; trial 1 is the state of the earlier single-trial runs). The times in `pgf/scaling_*` are the median over the trials, with `*_min`/`*_max` for the spread, those in `d2_summary.csv` the median; `sweep_summary.csv` and `pgf/sweep/` hold the mean.
 
 ## The values
 
@@ -93,5 +93,5 @@ Every configuration runs once (`N_TRIALS = 1`). The `*_min`/`*_max` columns and 
 ## Not recorded
 
 - **Complex states for the Givens tree:** it only accepts real amplitudes.
-- **Repeated trials:** `N_TRIALS = 1`, so times are single runs; small differences can flip between runs.
+- **Many trials:** 3 per configuration give a median and a range, not a confidence interval; close times can still swap order.
 - **Hardware cost:** QRAM query cost, and the decomposition of multi-controlled gates into two-qudit gates, are not measured.
