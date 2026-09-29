@@ -1,0 +1,4 @@
+[submodule "qclab"]
+	path = qclab
+	url = https://github.com/iannisimo/qclab
+	branch = qudit
