@@ -7,7 +7,7 @@ Two scripts write everything under `results/`; `results/` holds nothing else. Re
 | `scaling_accuracy.m` | `results/scaling/` | correctness, degenerate inputs, build time, simulation time, equal state size |
 | `d2_consistency.m` | `results/d2/` | consistency at d = 2, cost of the qudit generalization |
 
-`results/run_all.log` is the console output of the last run: one line per run, ending in `ok` or `FAIL`.
+`results/run_all.log` is the console output of the last serial run: one line per run, ending in `ok` or `FAIL`. A parallel run (`run_parallel.sh`) writes `results/run_parallel.log` instead (one line per job, with its core, exit code and duration) and the console output of every job to `results/logs/`; its output files are the same. The two runs differ only in the times and, at the level of 1e-16, in `unitarity` (the probe uses multithreaded linear algebra in a serial run, one thread in a parallel one).
 
 The algorithms, as named in the files:
 

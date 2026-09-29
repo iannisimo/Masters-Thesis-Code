@@ -77,16 +77,56 @@ HERE    = fileparts(mfilename('fullpath'));
 OUT_REL = fullfile('results', 'scaling');   % printed in the log (no local paths)
 OUT_DIR = fullfile(HERE, OUT_REL);
 addpath(fullfile(HERE, '..'));           % the functions add qclab and util themselves
+addpath(HERE);                           % saveShard, loadShards
 if ~exist(OUT_DIR, 'dir'), mkdir(OUT_DIR); end
+
+%% ------------------------------------------------------------------------
+%  Jobs (run_parallel.sh)
+%  ------------------------------------------------------------------------
+% With the environment variable JOB unset, everything runs here, in order.
+% run_parallel.sh runs one MATLAB per job instead, chosen by JOB:
+%   list               print the jobs, one per line (and delete old shards)
+%   scaling:<alg>:<d>  1a-2a for one algorithm and d  -> shards/scaling_<alg>_<d>.mat
+%   sweep:<N>:<d>      3 for one N and d              -> shards/sweep_<N>_<d>.mat
+%   merge              2b, then every output file, with the rows of the shards
+% Every run seeds its own state, so the output is the same as a serial run
+% (except for the times).
+
+JOB       = strtrim(getenv('JOB'));
+SHARD_DIR = fullfile(OUT_DIR, 'shards');
+scalingJobs = {};
+for a = 1:numel(ALGORITHMS)
+  for d = DS
+    if any(strcmp(ALGORITHMS{a}, QUBIT_ONLY)) && d ~= 2, continue; end
+    scalingJobs{end+1} = sprintf('scaling:%s:%d', ALGORITHMS{a}, d); %#ok<SAGROW>
+  end
+end
+sweepJobs = {};
+for N = SWEEP_NS
+  for d = dimensionsFor(N, SWEEP_MIN_n)
+    sweepJobs{end+1} = sprintf('sweep:%d:%d', N, d); %#ok<SAGROW>
+  end
+end
+if strcmp(JOB, 'list')
+  if exist(SHARD_DIR, 'dir'), rmdir(SHARD_DIR, 's'); end
+  fprintf('@@JOB %s\n', scalingJobs{:}, sweepJobs{:});
+  return
+end
+if ~isempty(JOB) && ~any(strcmp(JOB, [scalingJobs, sweepJobs, {'merge'}]))
+  error('Unknown JOB "%s" (JOB=list prints the valid ones)', JOB);
+end
+runsHere = @(job) isempty(JOB) || strcmp(JOB, job);
 
 %% ------------------------------------------------------------------------
 %  1a, 1b, 2a, 2c: random states, growing n at fixed d
 %  ------------------------------------------------------------------------
 
 % warm-up (untimed): the first call of each algorithm pays for JIT/class loading
-for a = 1:numel(ALGORITHMS)
-  f = algorithmFunction(ALGORITHMS{a});
-  [~] = f(2, 2, 0, 0);
+if ~strcmp(JOB, 'merge')
+  for a = 1:numel(ALGORITHMS)
+    f = algorithmFunction(ALGORITHMS{a});
+    [~] = f(2, 2, 0, 0);
+  end
 end
 
 rows = {};
@@ -97,6 +137,7 @@ for a = 1:numel(ALGORITHMS)
 
   for d = DS
     if any(strcmp(alg, QUBIT_ONLY)) && d ~= 2, continue; end
+    if ~runsHere(sprintf('scaling:%s:%d', alg, d)), continue; end
 
     n = MIN_n;
     while d^n <= N_MAX
@@ -134,12 +175,53 @@ for a = 1:numel(ALGORITHMS)
   end
 end
 
+if startsWith(JOB, 'scaling:'), saveShard(SHARD_DIR, JOB, rows); return; end
+
+%% ------------------------------------------------------------------------
+%  3: fixed-N sweep, equal state size across d
+%  ------------------------------------------------------------------------
+
+srows = {};
+for N = SWEEP_NS
+  for d = dimensionsFor(N, SWEEP_MIN_n)
+    if ~runsHere(sprintf('sweep:%d:%d', N, d)), continue; end
+    n = round(log(N) / log(d));
+    for a = 1:numel(ALGORITHMS)
+      alg = ALGORITHMS{a};
+      if any(strcmp(alg, QUBIT_ONLY)) && d ~= 2, continue; end
+      isComplex = strcmp(TIMING_ENSEMBLE, 'complex');
+      for trial = 1:N_TRIALS
+        seed = BASE_SEED + trial;        % same psi for every algorithm
+        fprintf('sweep N=%-5d d=%-3d n=%-2d %-10s %-7s trial %d: ', N, d, n, alg, TIMING_ENSEMBLE, trial);
+        f = algorithmFunction(alg);
+        [cir, err, bt, st] = f(d, n, double(isComplex), seed);
+        unit = unitarityDefect(cir, d, n, UNIT_K);
+        cs   = circuitStats(cir, n);
+        srows{end+1} = [{N, d, n, alg, TIMING_ENSEMBLE, trial, seed}, statsCells(cs), ...
+          {bt, st, err, unit}]; %#ok<SAGROW>
+        status = 'ok';
+        if ~(err <= TOL && unit <= TOL), status = 'FAIL'; end
+        fprintf('%5d gates, depth %5d, build %.3fs, sim %.3fs, err %.1e, unit %.1e  %s\n', ...
+          cs.nGates, cs.depth, bt, st, err, unit, status);
+      end
+    end
+  end
+end
+
+if startsWith(JOB, 'sweep:'), saveShard(SHARD_DIR, JOB, srows); return; end
+
+% merge: the rows of the parallel jobs, in the order of a serial run
+if strcmp(JOB, 'merge')
+  rows  = loadShards(SHARD_DIR, scalingJobs);
+  srows = loadShards(SHARD_DIR, sweepJobs);
+end
+
 raw = cell2table(vertcat(rows{:}), 'VariableNames', [{'algorithm', 'd', 'n', 'N', ...
   'ensemble', 'trial', 'seed'}, STATS_NAMES, {'buildTime', 'simTime', 'error', 'unitarity'}]);
 writetable(raw, fullfile(OUT_DIR, 'scaling_raw.csv'));
 
 %% ------------------------------------------------------------------------
-%  2b, 2c: edge-case states
+%  2b, 2c: edge-case states (not timed: run serially, or in the merge job)
 %  ------------------------------------------------------------------------
 
 erows = {};
@@ -165,36 +247,6 @@ edges = cell2table(vertcat(erows{:}), 'VariableNames', [{'edgeCase', 'd', 'n', .
   'algorithm', 'status'}, STATS_NAMES, {'nIdentity', 'error', 'unitarity', 'message'}]);
 writetable(edges, fullfile(OUT_DIR, 'edge_raw.csv'));
 
-%% ------------------------------------------------------------------------
-%  3: fixed-N sweep, equal state size across d
-%  ------------------------------------------------------------------------
-
-srows = {};
-for N = SWEEP_NS
-  for d = dimensionsFor(N, SWEEP_MIN_n)
-    n = round(log(N) / log(d));
-    for a = 1:numel(ALGORITHMS)
-      alg = ALGORITHMS{a};
-      if any(strcmp(alg, QUBIT_ONLY)) && d ~= 2, continue; end
-      isComplex = strcmp(TIMING_ENSEMBLE, 'complex');
-      for trial = 1:N_TRIALS
-        seed = BASE_SEED + trial;        % same psi for every algorithm
-        fprintf('sweep N=%-5d d=%-3d n=%-2d %-10s %-7s trial %d: ', N, d, n, alg, TIMING_ENSEMBLE, trial);
-        f = algorithmFunction(alg);
-        [cir, err, bt, st] = f(d, n, double(isComplex), seed);
-        unit = unitarityDefect(cir, d, n, UNIT_K);
-        cs   = circuitStats(cir, n);
-        srows{end+1} = [{N, d, n, alg, TIMING_ENSEMBLE, trial, seed}, statsCells(cs), ...
-          {bt, st, err, unit}]; %#ok<SAGROW>
-        status = 'ok';
-        if ~(err <= TOL && unit <= TOL), status = 'FAIL'; end
-        fprintf('%5d gates, depth %5d, build %.3fs, sim %.3fs, err %.1e, unit %.1e  %s\n', ...
-          cs.nGates, cs.depth, bt, st, err, unit, status);
-      end
-    end
-  end
-end
-
 sweep = cell2table(vertcat(srows{:}), 'VariableNames', [{'N', 'd', 'n', 'algorithm', ...
   'ensemble', 'trial', 'seed'}, STATS_NAMES, {'buildTime', 'simTime', 'error', 'unitarity'}]);
 writetable(sweep, fullfile(OUT_DIR, 'sweep_raw.csv'));
@@ -217,6 +269,7 @@ fprintf('Wrote %s\n', fullfile(OUT_REL, 'edge_raw.csv'));
 fprintf('Wrote %s\n', fullfile(OUT_REL, 'sweep_raw.csv'));
 fprintf('Wrote %s\n', fullfile(OUT_REL, 'sweep_summary.csv'));
 fprintf('Wrote %s\n', fullfile(OUT_REL, 'pgf'));
+if strcmp(JOB, 'merge'), rmdir(SHARD_DIR, 's'); end
 
 
 %% ========================================================================

@@ -54,6 +54,29 @@ dimensions, largest state size, number of trials) are at the top of each script.
 The times are wall-clock times, so run the experiments on an otherwise idle
 machine. `experiments/DATA.md` describes every output file and column.
 
+### In parallel
+
+```bash
+./run_parallel.sh                     # same output as run_all.sh
+```
+
+`run_parallel.sh` splits the scripts into independent jobs (one per algorithm
+and d, per N and d of the equal-size sweep, per n of the d = 2 check) and runs
+one MATLAB per job with `-singleCompThread`, pinned with `taskset` to its own
+physical core; hyperthread siblings are left idle. The jobs are spread over the
+sockets, and a final merge writes the same files as a serial run. `CORES="0 1 2"`
+restricts it to the given logical CPUs. Logs: `results/run_parallel.log` (one
+line per job) and `results/logs/`.
+
+Jobs running side by side share caches and memory bandwidth. To check that
+this does not change the times, compare a serial and a parallel run on the
+same machine:
+
+```bash
+./run_all.sh && cp -r results results_serial && ./run_parallel.sh
+matlab -batch "compare_times('results_serial', 'results')"
+```
+
 ## License
 
 MIT (see `LICENSE`), except `qclab/`, which keeps its own license.

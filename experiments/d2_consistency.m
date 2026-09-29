@@ -38,19 +38,38 @@ HERE    = fileparts(mfilename('fullpath'));
 OUT_REL = fullfile('results', 'd2');        % printed in the log (no local paths)
 OUT_DIR = fullfile(HERE, OUT_REL);
 addpath(fullfile(HERE, '..'));           % the functions add qclab and util themselves
+addpath(HERE);                           % saveShard, loadShards
 if ~exist(OUT_DIR, 'dir'), mkdir(OUT_DIR); end
+
+% Jobs for run_parallel.sh, chosen by the environment variable JOB (unset:
+% everything, here): list (print them, delete old shards), n:<n> (one n ->
+% shards/n_<n>.mat), merge (the output files from the shards).
+JOB       = strtrim(getenv('JOB'));
+SHARD_DIR = fullfile(OUT_DIR, 'shards');
+jobs      = arrayfun(@(n) sprintf('n:%d', n), NS, 'UniformOutput', false);
+if strcmp(JOB, 'list')
+  if exist(SHARD_DIR, 'dir'), rmdir(SHARD_DIR, 's'); end
+  fprintf('@@JOB %s\n', jobs{:});
+  return
+end
+if ~isempty(JOB) && ~any(strcmp(JOB, [jobs, {'merge'}]))
+  error('Unknown JOB "%s" (JOB=list prints the valid ones)', JOB);
+end
 
 %% ------------------------------------------------------------------------
 %  Runs
 %  ------------------------------------------------------------------------
 
 % warm-up (untimed): the first call of each algorithm pays for class loading
-[~] = KPTree(2, 2, 0, 0);
-[~] = QdKPTree_Givens(2, 2, 0, 0);
-[~] = QdKPTree_Householder(2, 2, 0, 0);
+if ~strcmp(JOB, 'merge')
+  [~] = KPTree(2, 2, 0, 0);
+  [~] = QdKPTree_Givens(2, 2, 0, 0);
+  [~] = QdKPTree_Householder(2, 2, 0, 0);
+end
 
 rows = {};
 for n = NS
+  if ~(isempty(JOB) || strcmp(JOB, sprintf('n:%d', n))), continue; end
   N = 2^n;
   for trial = 1:N_TRIALS
     seed = SEED0 + trial;                % same seed, same state for all three
@@ -86,6 +105,9 @@ for n = NS
   end
 end
 
+if startsWith(JOB, 'n:'), saveShard(SHARD_DIR, JOB, rows); return; end
+if strcmp(JOB, 'merge'), rows = loadShards(SHARD_DIR, jobs); end
+
 raw = cell2table(vertcat(rows{:}), 'VariableNames', {'n', 'N', 'trial', 'seed', ...
   'gates_kp', 'gates_givens', 'gates_house', 'err_kp', 'err_givens', 'err_house', ...
   'givens_col0', 'givens_U', 'house_col0', 'house_U', 'gatewise_same_qubits', ...
@@ -112,6 +134,7 @@ writetable(S, fullfile(OUT_DIR, 'd2_summary.csv'));
 
 fprintf('\nWrote %s\n', fullfile(OUT_REL, 'd2_raw.csv'));
 fprintf('Wrote %s\n', fullfile(OUT_REL, 'd2_summary.csv'));
+if strcmp(JOB, 'merge'), rmdir(SHARD_DIR, 's'); end
 
 
 %% ========================================================================
