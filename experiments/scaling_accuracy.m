@@ -51,7 +51,7 @@ QUBIT_ONLY  = {};                        % these only run with d = 2
 ENSEMBLES   = {'complex', 'real'};       % random-state ensembles (2a)
 TIMING_ENSEMBLE = 'real';                % the times (1a, 1b, 3) of every algorithm
 MIN_n       = 2;                         % smallest number of qudits
-N_MAX       = 2^14;                      % never go above this state size
+N_MAX       = 2^16;                      % never go above this state size
 TIME_BUDGET = 60;                        % s; stop growing n once a trial takes longer
 N_TRIALS    = 3;                         % random states per (algorithm, d, n, ensemble)
 BASE_SEED   = 0;

@@ -1,11 +1,12 @@
 # Experiment data: what is recorded and what it is for
 
-Two scripts write everything under `results/`; `results/` holds nothing else. Rerun both to regenerate it:
+Two scripts write the data under `results/`, and a third derives the tables of Chapter 5 from it; `results/` holds nothing else. Rerun them in this order to regenerate it:
 
 | Script | Writes | Chapter 5 sections |
 |---|---|---|
-| `scaling_accuracy.m` | `results/scaling/` | correctness, degenerate inputs, build time, simulation time, equal state size |
+| `scaling_accuracy.m` | `results/scaling/` | correctness (random inputs; the structured ones are run but not reported), build time, simulation time, equal state size |
 | `d2_consistency.m` | `results/d2/` | consistency at d = 2, cost of the qudit generalization |
+| `thesis_tables.m` | `results/tables/` | the three tables, and the checks behind the text; reads the CSVs above, runs no experiment |
 
 `results/run_all.log` is the console output of the last serial run: one line per run, ending in `ok` or `FAIL`. A parallel run (`run_parallel.sh`) writes `results/run_parallel.log` instead (one line per job, with its core, exit code and duration) and the console output of every job to `results/logs/`; its output files are the same. The two runs differ only in the times and, at the level of 1e-16, in `unitarity` (the probe uses multithreaded linear algebra in a serial run, one thread in a parallel one).
 
@@ -27,10 +28,14 @@ Every state is normalized, and every seed is fixed, so a rerun prepares the same
 | **complex** | `randn + 1i*randn` | 1000 + trial | Bullock, Householder | **Correctness only.** Error and unitarity defect (Figure 5.1, Table 5.1). Its times are in `scaling_raw.csv` but are not exported or used. |
 | **real** | `randn` | 2000 + trial | all three | **Correctness and every time.** All algorithms are timed on this ensemble, so the time plots compare them on the same states. |
 | **real, equal N** | `randn` | trial | all three | The equal-N sweep. At a given N every d and every algorithm prepares **the same state**. |
-| **structured** | 10 real inputs that reach the degenerate cases (zero entries, zero nodes, basis states, uniform, sparse) | 7919·case + k | all three | Pass/fail, error, defect, identity gates. The chapter keeps one sentence on them (all pass) and uses the identity counts in the future-work paragraph. |
+| **structured** | 10 real inputs that reach the degenerate cases (zero entries, zero nodes, basis states, uniform, sparse) | 7919·case + k | all three | Pass/fail, error, defect, identity gates. **Run but not reported in the thesis** (see below). |
 | **real, d = 2** | `randn` | 2000 + trial | KP-Tree, both QdKP-Trees | The same states as the real ensemble of the scaling grid at d = 2. |
 
 Complex states cost more time. At N ≥ 1000, Bullock builds about 1.4× slower on them (median; 1.05–2.3×) and simulates about 1.3× slower. The Householder tree builds at the same speed and simulates about 1.1× slower. This is why every time comes from the real ensemble.
+
+## Structured inputs: run, not reported
+
+The structured (degenerate) inputs are still run by `scaling_accuracy.m`, and all 120 runs pass, but Chapter 5 does not mention them: they add nothing to the narrative, which rests on the random states. Their data (`edge_*.csv`, the degenerate-inputs part of `scaling_accuracy.m`) is kept as a check on the implementations. The future-work remark on identity gates in sparse states is stated in the chapter without their counts.
 
 ## The grids
 
@@ -60,8 +65,8 @@ Every random configuration runs 3 times (`N_TRIALS = 3`, trials 1, 2, 3 with the
 
 | Value | Meaning | Use |
 |---|---|---|
-| `status` | `pass`, `fail`, `nan` or `error` | Every input is handled (all 120 pass); stated in one sentence in the correctness section. |
-| `nIdentity` | gates whose matrix is the identity, phase gate included | How many gates do nothing. On sparse inputs both reflector-based loaders have many (14 and 13 of 16 at (2,4) with d nonzero entries), while the Givens tree skips empty nodes; this backs the sparse-state future-work paragraph. On the uniform state only Bullock has them (its reflectors collapse nodes ahead of their turn). |
+| `status` | `pass`, `fail`, `nan` or `error` | Every input is handled (all 120 pass). |
+| `nIdentity` | gates whose matrix is the identity, phase gate included | How many gates do nothing. On sparse inputs both reflector-based loaders have many (14 and 13 of 16 at (2,4) with d nonzero entries), while the Givens tree skips empty nodes; this backs the sparse-state future-work paragraph. On the uniform state only Bullock has them (its reflectors collapse nodes ahead of their turn). Not quoted in the thesis. |
 
 ## Files
 
@@ -79,9 +84,9 @@ Every random configuration runs 3 times (`N_TRIALS = 3`, trials 1, 2, 3 with the
 |---|---|---|
 | `scaling_<alg>_d<d>.csv` | Real ensemble, one row per N: n, nGates, depth, build/sim median, min and max, and `build_slope`/`sim_slope`, the slope of log t against log N from the previous size | Figures 5.2 and 5.3, Table 5.4, every slope quoted in the text |
 | `error_<alg>_<ens>.csv` | Every random run: N, d, n, trial, error, unitarity | Figure 5.1, Table 5.1 |
-| `edge_max.csv` | Largest error and defect per input and algorithm | the bounds quoted for the degenerate inputs |
-| `edge_table.csv` | Pass/fail per input and algorithm | the check behind "all pass" |
-| `edge_identity.csv` | nGates and nIdentity per (input, d, n) and algorithm | the identity-reflector counts |
+| `edge_max.csv` | Largest error and defect per input and algorithm | not used |
+| `edge_table.csv` | Pass/fail per input and algorithm | not used |
+| `edge_identity.csv` | nGates and nIdentity per (input, d, n) and algorithm | not used |
 | `sweep/sweep_N<N>.csv` | One row per d: n, the predicted counts `ref_householder` and `ref_givens`, and for each algorithm nGates, depth, buildTime, simTime, error, unitarity | Figures 5.4 and 5.5 (section "Equal state size") |
 
 ### `results/d2/`
@@ -89,6 +94,15 @@ Every random configuration runs 3 times (`N_TRIALS = 3`, trials 1, 2, 3 with the
 | File | Content | Used in |
 |---|---|---|
 | `d2_raw.csv`, `d2_summary.csv` | Per n: gates, error of each loader; `*_col0` = ‖(C − C_KP)\|0…0⟩‖₂ and `*_U` = ‖(C − C_KP)X‖₂ against the KP-Tree; the gate-by-gate check (`gatewise_*`, n ≤ 10); build and simulation times of all three | Table 5.3; the qubit-vs-qudit cost comparison in the simulation section |
+
+### `results/tables/` (`thesis_tables.m`)
+
+The figures read their CSVs directly; the tables are typed in the thesis, so they are cross-referenced against this output.
+
+| File | Content |
+|---|---|
+| `tables.txt` | Every cell of Tables 5.1, 5.3 and 5.4 at full precision (`%.17g`), the value as printed in the thesis, and the run it comes from; then the checks behind the text: every random run passes, the largest error and defect and how far below 1e-8 they are, gate counts against Chapter 4, runs with an error of exactly 0 (not drawn in Figure 5.1), the d = 2 distances and gate-by-gate check, the spread, time per gate and last slope at the largest N of each d, and the build slopes on complex states. |
+| `tab_random_error.tex`, `tab_d2.tex`, `tab_times.tex` | The body rows of the three tables (between `\midrule` and `\bottomrule`), exactly as printed in `tables.txt`. |
 
 ## Not recorded
 

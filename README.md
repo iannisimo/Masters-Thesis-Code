@@ -51,6 +51,10 @@ if `matlab` is not on the PATH. The scripts can also be run on their own from
 MATLAB, e.g. `run('experiments/scaling_accuracy.m')`. Their parameters (the
 dimensions, largest state size, number of trials) are at the top of each script.
 
+After a run, `run('experiments/thesis_tables.m')` writes the tables of
+Chapter 5 and the checks behind its text to `results/tables/` (it only reads
+the result CSVs).
+
 The times are wall-clock times, so run the experiments on an otherwise idle
 machine. `experiments/DATA.md` describes every output file and column.
 
