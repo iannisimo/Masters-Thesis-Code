@@ -29,36 +29,32 @@ function [circuit, err, b_time, s_time] = QR_bullock(d, n, IMAG, seed, psi_in)
 
     % gates collected here and added to the circuits in one insert
     % (see circuitFromGates)
-    fGates = cell(1, numel(cs));   % forward gates, reduction order
-    bGates = cell(1, numel(cs));   % their adjoints
+    gates = cell(1, numel(cs) + 1);   % reduction gates, in order
     k = 0;
 
     for term = cs
         [c, cv, t, V] = singleClubHouseholder(term, psi, d);
         VGate = qclab.qgates.MatrixGate(t-1, V);
-        if c == -1
-            fVGate = VGate;
-            bVGate = VGate.ctranspose();
-        else
-            fVGate = qclab.qgates.ControlledGate(VGate, c-1, t-1, cv - '0');
-            bVGate = qclab.qgates.ControlledGate(VGate.ctranspose(), c-1, t-1, cv - '0');
+        if c ~= -1
+            VGate = qclab.qgates.ControlledGate(VGate, c-1, t-1, cv - '0');
         end
-        psi = fVGate.apply('R', 'N', n, psi, 0, d);
+        psi = VGate.apply('R', 'N', n, psi, 0, d);
         % psi(abs(psi) < 1e-6) = 0
         k = k + 1;
-        fGates{k} = fVGate;
-        bGates{k} = bVGate;
+        gates{k} = VGate;
     end
 
+    % the reduced state is e^{i theta}|0>: the reduction ends by removing it
     globalPhase = psi(1,1);
-    phase = qclab.qgates.Phase(n-1, real(globalPhase), imag(globalPhase));
-    dPhase = qclab.qgates.qudit.SubspaceGate(phase, [1, 0], n-1);
-    % reduction circuit: the adjoints in reduction order, then the phase;
-    % preparation circuit: its adjoint, i.e. the adjoint phase, then the
-    % forward gates in reverse order (built directly: QCircuit.ctranspose
-    % assigns its gates one by one, which costs O(K^2) like push_back)
-    circuit = circuitFromGates(n, d, [bGates, {dPhase}]);
-    prep = circuitFromGates(n, d, [{dPhase.ctranspose()}, fliplr(fGates)]);
+    gates{end} = qclab.qgates.qudit.SubspaceGate( ...
+      qclab.qgates.Phase(n-1, real(globalPhase), -imag(globalPhase)), [1, 0], n-1);
+    % reduction circuit: psi -> |0>; preparation circuit: its adjoint, i.e.
+    % the adjoints of the gates in reverse order (built directly:
+    % QCircuit.ctranspose assigns its gates one by one, which costs O(K^2)
+    % like push_back)
+    circuit = circuitFromGates(n, d, gates);
+    prep = circuitFromGates(n, d, cellfun(@ctranspose, fliplr(gates), ...
+      'UniformOutput', false));
     b_time = toc;
 
     % |0...0> as a vector: the bitstring form uses base2dec, which fails for d > 36
