@@ -20,6 +20,19 @@ SCRIPTS=("$@")
 [ ${#SCRIPTS[@]} -eq 0 ] && SCRIPTS=(scaling_accuracy.m d2_consistency.m)
 command -v "$MATLAB" > /dev/null || { echo "matlab not found; set MATLAB=/path/to/matlab" >&2; exit 1; }
 command -v taskset > /dev/null || { echo "taskset not found (package util-linux)" >&2; exit 1; }
+
+# MATLAB statement that runs the MATLAB code $1 and then kills MATLAB: on some
+# machines MATLAB randomly hangs or segfaults on exit, so it is never left to
+# exit by itself. Prints @@OK if the code ran without error, else the error
+# report and @@ERR; the exit code of MATLAB is meaningless (killed).
+mwrap() {
+  echo "try, $1; fprintf('\n@@OK\n'); catch mErr, fprintf(2, '%s\n', getReport(mErr, 'extended', 'hyperlinks', 'off')); fprintf('\n@@ERR\n'); end; system(sprintf('kill -9 %d', feature('getpid')));"
+}
+# exit status of a MATLAB run from its output file $1 and the exit code $2 of
+# timeout: 0 on @@OK, 124 on timeout, else 1
+mstatus() {
+  if grep -q '^@@OK' "$1"; then echo 0; elif [ "$2" -eq 124 ]; then echo 124; else echo 1; fi
+}
 # stopping this script (Ctrl-C, kill) also stops the per-core loops and the MATLAB
 # jobs (timeout puts each job in its own process group: found by command line)
 trap 'trap - INT TERM; pkill -P $$; pkill -f "run.'\''$PWD/"; exit 130' INT TERM
@@ -48,8 +61,8 @@ runJob() {  # cpu script job
   local cpu=$1 s=$2 job=$3 t0=$SECONDS rc
   local name="${s%.m}_${job//:/_}"
   JOB=$job timeout -k 10 "$TIMEOUT" taskset -c "$cpu" "$MATLAB" -singleCompThread \
-    -batch "run('$PWD/$s')" < /dev/null > "results/logs/$name.log" 2>&1
-  rc=$?
+    -batch "$(mwrap "run('$PWD/$s')")" < /dev/null > "results/logs/$name.log" 2>&1
+  rc=$(mstatus "results/logs/$name.log" $?)
   log "$(date +%T)  cpu $cpu  $name  exit=$rc  $((SECONDS - t0))s"
   return $rc
 }
@@ -58,7 +71,7 @@ runJob() {  # cpu script job
 JOBS=()
 for s in "${SCRIPTS[@]}"; do
   out=$(JOB=list taskset -c "${CPUS[0]}" "$MATLAB" -singleCompThread \
-    -batch "fprintf('@@VER %s\n', version); run('$PWD/$s')" < /dev/null 2>&1)
+    -batch "fprintf('@@VER %s\\n', version); $(mwrap "run('$PWD/$s')")" < /dev/null 2>&1)
   list=$(sed -n 's/^@@JOB //p' <<< "$out")
   [ -n "$list" ] || { echo "$out"; echo "no jobs from $s" >&2; exit 1; }
   for j in $list; do JOBS+=("$s $j"); done
