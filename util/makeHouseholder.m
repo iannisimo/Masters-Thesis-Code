@@ -12,6 +12,9 @@ if abs(dot) < eps * norm(phi)
 else
   sgn = dot / abs(dot);
 end
-eta = phi - sqrt(phi'*phi) * sgn * zero;
-W = eye(length(phi)) - (2 / (eta'*eta)) * (eta * eta');
+% phi + ||phi|| sgn e1 avoids the cancellation in eta(1) when phi is close
+% to e1; the reflector then maps phi to -sgn ||phi|| e1, so it is negated
+% to keep W phi = sgn ||phi|| e1
+eta = phi + sqrt(phi'*phi) * sgn * zero;
+W = -(eye(length(phi)) - (2 / (eta'*eta)) * (eta * eta'));
 end
