@@ -1,12 +1,13 @@
 # Experiment data: what is recorded and what it is for
 
-Two scripts write the data under `results/`, and a third derives the tables of Chapter 5 from it; `results/` holds nothing else. Rerun them in this order to regenerate it:
+Two scripts write the data under `results/`, a third derives the tables of Chapter 5 from it, and a fourth fits the growth of the times; `results/` holds nothing else. Rerun them in this order to regenerate it:
 
 | Script | Writes | Chapter 5 sections |
 |---|---|---|
 | `scaling_accuracy.m` | `results/scaling/` | correctness (random inputs; the structured ones are run but not reported), build time, simulation time, equal state size |
 | `d2_consistency.m` | `results/d2/` | consistency at d = 2, cost of the qudit generalization |
 | `thesis_tables.m` | `results/tables/` | the three tables, and the checks behind the text; reads the CSVs above, runs no experiment |
+| `fit_scaling.m` | `results/fits/` | degree-1 and degree-2 fits (polyfit) of the build and simulation times against N, per algorithm and d: does the quadratic term matter? Reads `scaling_raw.csv`, runs no experiment |
 
 `results/run_all.log` is the console output of the last serial run: one line per run, ending in `ok` or `FAIL`. A parallel run (`run_parallel.sh`) writes `results/run_parallel.log` instead (one line per job, with its core, exit code and duration) and the console output of every job to `results/logs/`; its output files are the same. The two runs differ only in the times and, at the level of 1e-16, in `unitarity` (the probe uses multithreaded linear algebra in a serial run, one thread in a parallel one).
 

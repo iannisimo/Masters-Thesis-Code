@@ -39,7 +39,6 @@ function [circuit, err, b_time, s_time] = QR_bullock(d, n, IMAG, seed, psi_in)
             VGate = qclab.qgates.ControlledGate(VGate, c-1, t-1, cv - '0');
         end
         psi = VGate.apply('R', 'N', n, psi, 0, d);
-        % psi(abs(psi) < 1e-6) = 0
         k = k + 1;
         gates{k} = VGate;
     end
