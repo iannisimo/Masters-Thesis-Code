@@ -5,6 +5,7 @@ Two scripts write the data under `results/`, a third derives the tables of Chapt
 | Script | Writes | Chapter 5 sections |
 |---|---|---|
 | `scaling_accuracy.m` | `results/scaling/` | correctness (random inputs; the structured ones are run but not reported), build time, simulation time, equal state size |
+| `summarizeSweep.m` | `results/scaling/sweep_summary.csv`, `results/scaling/pgf/sweep/` | called by `scaling_accuracy.m`; run on its own, it rewrites both from `sweep_raw.csv` without running any experiment |
 | `d2_consistency.m` | `results/d2/` | consistency at d = 2, cost of the qudit generalization |
 | `thesis_tables.m` | `results/tables/` | the three tables, and the checks behind the text; reads the CSVs above, runs no experiment |
 | `fit_scaling.m` | `results/fits/` | degree-1 and degree-2 fits of the build and simulation times against N, per algorithm and d, and an F-test of the quadratic term: does it matter? Fitted on the relative misfit (t − fit)/t, which carries the conclusion, and on the absolute one (as polyfit), side by side to show where the latter misleads. Reads `scaling_raw.csv`, runs no experiment |
@@ -47,7 +48,7 @@ The structured (degenerate) inputs are still run by `scaling_accuracy.m`, and al
 | Equal N | N = 729 (d = 3, 9, 27), 4096 (d = 2, 4, 8, 16, 64), 6561 (d = 3, 9, 81), 15625 (d = 5, 25, 125) × 3 algorithms | 3 × 42 = 126 |
 | d = 2 consistency | n = 2, …, 16; gate-by-gate check up to n = 10 | 3 × 15 per algorithm |
 
-Every random configuration runs 3 times (`N_TRIALS = 3`, trials 1, 2, 3 with the seeds above; trial 1 is the state of the earlier single-trial runs). The times in `pgf/scaling_*` are the median over the trials, with `*_min`/`*_max` for the spread, those in `d2_summary.csv` the median; `sweep_summary.csv` and `pgf/sweep/` hold the mean.
+Every random configuration runs 3 times (`N_TRIALS = 3`, trials 1, 2, 3 with the seeds above; trial 1 is the state of the earlier single-trial runs). The times in `pgf/scaling_*` are the median over the trials, with `*_min`/`*_max` for the spread, those in `d2_summary.csv`, `sweep_summary.csv` and `pgf/sweep/` the median too.
 
 ## The values
 
@@ -77,7 +78,7 @@ Every random configuration runs 3 times (`N_TRIALS = 3`, trials 1, 2, 3 with the
 |---|---|
 | `scaling_raw.csv` | One row per random run: algorithm, d, n, N, ensemble, trial, seed, nGates, depth, buildTime, simTime, error, unitarity. Holds everything, including the unused complex-state times. |
 | `edge_raw.csv` | One row per (input, d, n, algorithm): status, nGates, depth, nIdentity, error, unitarity, and the error message if the construction failed. |
-| `sweep_raw.csv`, `sweep_summary.csv` | The equal-N runs; the summary is the mean over trials. |
+| `sweep_raw.csv`, `sweep_summary.csv` | The equal-N runs; the summary is the median over trials. |
 
 ### `results/scaling/pgf/` (read by the thesis; rewritten from scratch on every run)
 

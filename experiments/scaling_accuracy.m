@@ -31,10 +31,10 @@
 %   scaling_raw.csv   one row per random trial
 %   edge_raw.csv      one row per (edge case, d, n, algorithm)
 %   sweep_raw.csv     one row per fixed-N trial (3)
-%   sweep_summary.csv mean over the trials of each (N, d, algorithm)
+%   sweep_summary.csv median over the trials of each (N, d, algorithm)
 %   pgf/              the same data laid out for pgfplots (see writePgfData),
 %                     rewritten from scratch on every run
-%   pgf/sweep/        part 3 (see writeSweepPgf)
+%   pgf/sweep/        part 3 (see summarizeSweep.m)
 %
 % Run from anywhere:  run('code/experiments/scaling_accuracy.m')
 
@@ -250,9 +250,6 @@ writetable(edges, fullfile(OUT_DIR, 'edge_raw.csv'));
 sweep = cell2table(vertcat(srows{:}), 'VariableNames', [{'N', 'd', 'n', 'algorithm', ...
   'ensemble', 'trial', 'seed'}, STATS_NAMES, {'buildTime', 'simTime', 'error', 'unitarity'}]);
 writetable(sweep, fullfile(OUT_DIR, 'sweep_raw.csv'));
-sweepSummary = groupsummary(sweep, {'N', 'd', 'n', 'algorithm'}, 'mean', ...
-  [STATS_NAMES, {'buildTime', 'simTime', 'error', 'unitarity'}]);
-writetable(sweepSummary, fullfile(OUT_DIR, 'sweep_summary.csv'));
 
 %% ------------------------------------------------------------------------
 %  Save for pgfplots
@@ -262,7 +259,7 @@ writetable(sweepSummary, fullfile(OUT_DIR, 'sweep_summary.csv'));
 if exist(fullfile(OUT_DIR, 'pgf'), 'dir'), rmdir(fullfile(OUT_DIR, 'pgf'), 's'); end
 writePgfData(raw, edges, ALGORITHMS, ENSEMBLES, TIMING_ENSEMBLE, EDGE_CASES, ...
   fullfile(OUT_DIR, 'pgf'));
-writeSweepPgf(sweepSummary, ALGORITHMS, fullfile(OUT_DIR, 'pgf', 'sweep'));
+summarizeSweep(sweep, ALGORITHMS, OUT_DIR);   % sweep_summary.csv and pgf/sweep/
 
 fprintf('\nWrote %s\n', fullfile(OUT_REL, 'scaling_raw.csv'));
 fprintf('Wrote %s\n', fullfile(OUT_REL, 'edge_raw.csv'));
@@ -416,33 +413,6 @@ end
 function c = statsCells(stats)
 % circuitStats fields as a cell row, in the order of STATS_NAMES.
 c = {stats.nGates, stats.depth};
-end
-
-function writeSweepPgf(summary, algs, pgfDir)
-% Part 3, for pgfplots:
-%   sweep_N<N>.csv   one row per d: d, n, ref_householder = (N-1)/(d-1) + 1,
-%                    ref_givens = N - 1, and <alg>_<metric> (mean over the
-%                    trials; NaN for algorithms not run at that d)
-metrics = {'nGates', 'depth', 'buildTime', 'simTime', 'error', 'unitarity'};
-if ~exist(pgfDir, 'dir'), mkdir(pgfDir); end
-
-for N = unique(summary.N)'
-  S  = summary(summary.N == N, :);
-  d  = unique(S.d);
-  T  = table(d, round(log(N) ./ log(d)), (N - 1) ./ (d - 1) + 1, repmat(N - 1, size(d)), ...
-    'VariableNames', {'d', 'n', 'ref_householder', 'ref_givens'});
-  for a = 1:numel(algs)
-    for m = 1:numel(metrics)
-      col = NaN(size(d));
-      for i = 1:numel(d)
-        r = S.d == d(i) & strcmp(S.algorithm, algs{a});
-        if any(r), col(i) = S.(['mean_', metrics{m}])(r); end
-      end
-      T.([algs{a}, '_', metrics{m}]) = col;
-    end
-  end
-  writetable(T, fullfile(pgfDir, sprintf('sweep_N%d.csv', N)));
-end
 end
 
 function writePgfData(raw, edges, algs, ensembles, timingEns, edgeCases, pgfDir)
